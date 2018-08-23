@@ -1,27 +1,29 @@
 const delay = require('delay');
 const withRetry = require('promise-poller').default;
 
-const logger = require('./logger');
+const { logError } = require('./logger');
 
-const repeatTask = (task, interval, maxRetries) =>
-  withRetry({
-    taskFn: task,
-    interval,
-    retries: maxRetries,
-    progressCallback: (retriesRemaining, error) => logger.logError(error),
-  })
-    .then(() => delay(interval))
-    .then(() => repeatTask(task, interval))
-    .catch(() => {
-      logger.logError(
-        `Stopped running ${
-          task.name
-        } due to too many failures (${maxRetries}).`,
-      );
+const repeatTask = async (task, interval, maxRetries) => {
+  try {
+    await withRetry({
+      taskFn: task,
+      interval,
+      retries: maxRetries,
+      progressCallback: (retriesRemaining, error) => logError(error),
     });
+  } catch (error) {
+    logError(
+      `Stopped running ${task.name} due to too many failures (${maxRetries}).`,
+    );
+  }
 
-const runJobs = jobs => {
-  jobs.forEach(job => repeatTask(job.fn, job.interval, job.maxRetries));
+  await delay(interval);
+  await repeatTask(task, interval);
 };
+
+const runJobs = jobs =>
+  Promise.all(
+    jobs.map(job => repeatTask(job.fn, job.interval, job.maxRetries)),
+  );
 
 module.exports.runJobs = runJobs;
