@@ -8,6 +8,18 @@ let useBugsnag = false;
 
 const logger = signale.scope('application');
 
+const logError = (error, metadata = {}) => {
+  if (rollbar) {
+    rollbar.error(error, metadata.request);
+  }
+
+  if (useBugsnag) {
+    bugsnag.notify(error);
+  }
+
+  logger.error(error);
+};
+
 const configure = ({ bugsnagToken, rollbarToken }) => {
   if (_.isString(rollbarToken)) {
     rollbar = new Rollbar({
@@ -22,20 +34,8 @@ const configure = ({ bugsnagToken, rollbarToken }) => {
     useBugsnag = true;
   }
 
-  process.on('uncaughtException', logger.error);
-  process.on('unhandledRejection', logger.error);
-};
-
-const logError = (error, metadata = {}) => {
-  if (rollbar) {
-    rollbar.error(error, metadata.request);
-  }
-
-  if (useBugsnag) {
-    bugsnag.notify(error);
-  }
-
-  logger.error(error);
+  process.on('uncaughtException', logError);
+  process.on('unhandledRejection', logError);
 };
 
 module.exports = {
